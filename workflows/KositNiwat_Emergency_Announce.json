@@ -1,0 +1,1699 @@
+{
+  "name": "KositNiwat_Emergency_Announce",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months",
+              "triggerAtHour": 8
+            },
+            {
+              "field": "months",
+              "triggerAtHour": 21
+            }
+          ]
+        }
+      },
+      "id": "b7c6187a-6afb-4730-bc83-c742c2ad2397",
+      "name": "Schedule Trigger (สิ้นเดือน)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        1264,
+        2272
+      ],
+      "notes": "ส่งทุกวันสุดท้ายของเดือน เวลา 09:00 น. (Cron: 0 9 L * *)"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg",
+          "mode": "list",
+          "cachedResultName": "เก็บDataBase อพาท",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "3e0c8f50-4a05-4bb1-98e2-5005d67bf689",
+      "name": "ดึงผู้เช่าทุกห้อง (Sheet)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1504,
+        2272
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AGgSlViK8ETztOCm",
+          "name": "Google Sheets account ไอ้"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\n\nfor (const item of items) {\n  const row = item.json;\n\n  const userId = row['Line_ID (ไอดีไลน์)'];\n  if (!userId || userId.trim() === '') continue;\n\n  const roomNo     = row['Room_No (เลขห้อง)']             || 'ไม่ระบุ';\n  const tenantName = row['Name (ชื่อผู้เช่า)']            || 'ไม่ระบุชื่อ';\n  const roomRate   = parseFloat(row['Room_Rate (ค่าห้อง)'])            || 0;\n  const waterPrev  = parseFloat(row['Water_Prev (น้ำเดือนก่อน)'])      || 0;\n  const waterNow   = parseFloat(row['Water_Now (น้ำเดือนนี้)'])        || 0;\n  const elecPrev   = parseFloat(row['Elec_Prev (ไฟเดือนก่อน)'])       || 0;\n  const elecNow    = parseFloat(row['Elec_Now (ไฟเดือนนี้)'])          || 0;\n  const otherFee   = parseFloat(row['Other_Fee (ค่าอื่นๆ/ส่วนกลาง)']) || 0;\n\n  const WATER_RATE = 12;\n  const ELEC_RATE  = 4;\n\n  const waterUnit = Math.max(waterNow - waterPrev, 0);\n  const elecUnit  = Math.max(elecNow  - elecPrev,  0);\n  const waterCost = waterUnit * WATER_RATE;\n  const elecCost  = elecUnit  * ELEC_RATE;\n  const totalCost = roomRate + waterCost + elecCost + otherFee;\n\n  const now = new Date();\n  const monthTH = now.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });\n\n  const message = `🏠 แจ้งยอดชำระประจำ${monthTH}\n🚪 ห้อง: ${roomNo} (${tenantName})\n━━━━━━━━━━━━━━━━━\n💵 ค่าเช่าห้อง: ${roomRate.toLocaleString()} บาท\n💧 ค่าน้ำ (หน่วยละ ${WATER_RATE} บาท)\n▸ ใช้ไป ${waterUnit} หน่วย : ${waterCost.toLocaleString()} บาท\n⚡ ค่าไฟ (หน่วยละ ${ELEC_RATE} บาท)\n▸ ใช้ไป ${elecUnit} หน่วย : ${elecCost.toLocaleString()} บาท\n🔧 ค่าอื่นๆ/ส่วนกลาง: ${otherFee.toLocaleString()} บาท\n━━━━━━━━━━━━━━━━━\n💰 ยอดรวมทั้งสิ้น: ${totalCost.toLocaleString()} บาท\n━━━━━━━━━━━━━━━━━\n📱 ติดต่อเจ้าหน้าที่เพื่อสแกน QR Code ชำระเงินได้เลยครับ 🙏`;\n\n  results.push({ json: { userId, roomNo, tenantName, totalCost, message } });\n}\n\nreturn results;"
+      },
+      "id": "1c3bca5b-c071-41c6-b1a9-77ad93b3805e",
+      "name": "คำนวณค่าใช้จ่าย (Push)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        2272
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/push",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer ESFcqfwIlSF4E/TI3hTbgLU32tSoeje11twzn6PRA49ZBxKO82KwNdex/oZZJNJZqhn0krv2UyjzWtdQrzMCaqk6TroqvGBlZBhV1UNsueAuGeDxL9TM7kUKJOp2Ebr9ZgBUHprBv2ckKO0JMaHIYQdB04t89/1O/w1cDnyilFU="
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"to\": $json.userId,\n  \"messages\": [\n    {\n      \"type\": \"text\",\n      \"text\": $json.message\n    }\n  ]\n} }}",
+        "options": {}
+      },
+      "id": "0ba26ca1-4be1-4fe2-beb3-6031805ebe00",
+      "name": "Push LINE Message (ทุกห้อง)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1888,
+        2272
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "O8vvmNtuTgB5qC7f",
+          "name": "Authorization เฮง"
+        }
+      },
+      "notes": "ใช้ /message/push แทน /message/reply เพราะเป็นการส่งก่อน ไม่ใช่ตอบกลับ"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg",
+          "mode": "list",
+          "cachedResultName": "เก็บDataBase อพาท"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet2",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "6802de09-0d7d-43f1-ae1e-16c407690f5e",
+      "name": "ดึงข้อมูลที่พัก (Sheet2)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2064,
+        1888
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AGgSlViK8ETztOCm",
+          "name": "Google Sheets account ไอ้"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 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"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  model: \"llama-3.3-70b-versatile\",\n  messages: [\n    {\n      role: \"system\",\n      content: \"คุณคือผู้ช่วยตอบคำถามของอพาร์ตเมนต์ โฆษิตนิวาส (Khosit Niwat) ตอบเป็นภาษาไทย กระชับ ชัดเจน สุภาพ และเป็นมิตร ถ้าไม่มีข้อมูลในเอกสาร ให้บอกว่า ขออภัยครับ ไม่มีข้อมูลในส่วนนี้ กรุณาติดต่อนิติบุคคลโดยตรงครับ\"\n    },\n    {\n      role: \"user\",\n      content: $json.hotelInfo + \"\\n\\n=== คำถามจากผู้เช่า ===\\n\" + $json.userMessage\n    }\n  ]\n}) }}",
+        "options": {}
+      },
+      "id": "df63e3ab-5709-42d4-9172-cc81fe9eceb9",
+      "name": "Gemini API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2464,
+        1888
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer ESFcqfwIlSF4E/TI3hTbgLU32tSoeje11twzn6PRA49ZBxKO82KwNdex/oZZJNJZqhn0krv2UyjzWtdQrzMCaqk6TroqvGBlZBhV1UNsueAuGeDxL9TM7kUKJOp2Ebr9ZgBUHprBv2ckKO0JMaHIYQdB04t89/1O/w1cDnyilFU="
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "2a6d57ae-baaf-4c11-93b9-2ca98ea38935",
+      "name": "ตอบกลับ LINE (AI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2832,
+        1888
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "O8vvmNtuTgB5qC7f",
+          "name": "Authorization เฮง"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "4a7e4908-2b2e-49ca-9e13-65f743732470",
+      "name": "LINE Webhook3",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        1680
+      ],
+      "webhookId": "line-webhook-khosit"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ดึงข้อมูลจาก LINE Webhook\nconst body = $input.first().json.body || $input.first().json;\nconst events = body.events || [];\n\nif (events.length === 0) {\n  return [{ json: { skip: true } }];\n}\n\nconst event = events[0];\nconst messageType = event.type;\nconst userId = event.source?.userId || '';\nconst replyToken = event.replyToken || '';\n\nlet userMessage = '';\nif (messageType === 'message' && event.message?.type === 'text') {\n  userMessage = event.message.text.trim();\n}\n\nreturn [{\n  json: {\n    userId,\n    replyToken,\n    userMessage,\n    messageType,\n    skip: false\n  }\n}];"
+      },
+      "id": "637898ce-f096-440d-b914-1b7bd5610da7",
+      "name": "Parse LINE Event3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        1680
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer ESFcqfwIlSF4E/TI3hTbgLU32tSoeje11twzn6PRA49ZBxKO82KwNdex/oZZJNJZqhn0krv2UyjzWtdQrzMCaqk6TroqvGBlZBhV1UNsueAuGeDxL9TM7kUKJOp2Ebr9ZgBUHprBv2ckKO0JMaHIYQdB04t89/1O/w1cDnyilFU="
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "32631b07-402e-494a-a478-b4d0f7694aa7",
+      "name": "ตอบกลับ LINE3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2528,
+        1504
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "O8vvmNtuTgB5qC7f",
+          "name": "Authorization เฮง"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {}
+      },
+      "id": "e4f5b028-6a58-4133-a5bf-de1cae2e262a",
+      "name": "Respond to LINE3",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2752,
+        1504
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg",
+          "mode": "list",
+          "cachedResultName": "เก็บDataBase อพาท",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "ab7e5548-71ba-4cd4-8559-99a0e71ea6a6",
+      "name": "ดึงข้อพัสดุ (Tenant Sheet)2",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2048,
+        1712
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AGgSlViK8ETztOCm",
+          "name": "Google Sheets account ไอ้"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\nconst userId = $('Parse LINE Event3').first().json.userId;\nconst replyToken = $('Parse LINE Event3').first().json.replyToken;\n\nconst row = rows.find(r => r['Line_ID (ไอดีไลน์)'] === userId);\n\nif (!row) {\n  return [{\n    json: {\n      replyToken,\n      body: JSON.stringify({\n        replyToken,\n        messages: [{\n          type: \"text\",\n          text: \"❌ ไม่พบข้อมูลห้องพักของคุณในระบบครับ\"\n        }]\n      })\n    }\n  }];\n}\n\nconst roomNo = row['Room_No (เลขห้อง)'] || 'ไม่ระบุ';\nconst tenantName = row['Name (ชื่อผู้เช่า)'] || 'ไม่ระบุชื่อ';\nconst parcelCount = row['Parcel_Count (จำนวนพัสดุ)'] || 0;\n\nreturn [{\n  json: {\n    replyToken,\n    body: JSON.stringify({\n      replyToken,\n      messages: [{\n        type: \"flex\",\n        altText: \"แจ้งพัสดุรอรับ\",\n        contents: {\n          type: \"bubble\",\n          header: {\n            type: \"box\",\n            layout: \"vertical\",\n            backgroundColor: \"#FF6B35\",\n            paddingAll: \"20px\",\n            contents: [\n              { type: \"text\", text: \"📦 พัสดุรอรับ\", color: \"#FFFFFF\", weight: \"bold\", size: \"lg\" },\n              { type: \"text\", text: \"โฆษิตนิวาส (Khosit Niwat)\", color: \"#FFFFFFAA\", size: \"sm\" }\n            ]\n          },\n          body: {\n            type: \"box\",\n            layout: \"vertical\",\n            spacing: \"md\",\n            contents: [\n              {\n                type: \"box\",\n                layout: \"horizontal\",\n                contents: [\n                  { type: \"text\", text: \"🚪 ห้อง\", color: \"#888888\", size: \"sm\", flex: 2 },\n                  { type: \"text\", text: `${roomNo}`, color: \"#333333\", size: \"sm\", weight: \"bold\", flex: 3 }\n                ]\n              },\n              {\n                type: \"box\",\n                layout: \"horizontal\",\n                contents: [\n                  { type: \"text\", text: \"👤 ชื่อ\", color: \"#888888\", size: \"sm\", flex: 2 },\n                  { type: \"text\", text: tenantName, color: \"#333333\", size: \"sm\", flex: 3 }\n                ]\n              },\n              { type: \"separator\" },\n              {\n                type: \"box\",\n                layout: \"vertical\",\n                backgroundColor: \"#FFF3E0\",\n                cornerRadius: \"10px\",\n                paddingAll: \"15px\",\n                contents: [\n                  { type: \"text\", text: \"พัสดุรอรับทั้งหมด\", color: \"#FF6B35\", size: \"sm\", align: \"center\" },\n                  { type: \"text\", text: `${parcelCount} ชิ้น`, color: \"#FF6B35\", size: \"xxl\", weight: \"bold\", align: \"center\" }\n                ]\n              },\n              { type: \"text\", text: \"📍 รับพัสดุได้ที่ออฟฟิศนิติบุคคล\\nจ-ศ 08:00-20:00 น. / ส-อ 09:00-17:00 น.\", wrap: true, size: \"xs\", color: \"#888888\" }\n            ]\n          }\n        }\n      }]\n    })\n  }\n}];"
+      },
+      "id": "4fbb8d19-e4b9-4186-aa25-e5cc9967321f",
+      "name": "ดึง และ แสดงจำนวนพัสดุ2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2304,
+        1728
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.userMessage }}",
+                    "rightValue": "ค่าใช้จ่าย",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "6a1ae7f0-d84f-4ae2-a4e0-38bf059f7962"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "327a7aed-211d-472e-b00f-09c6dcfa6dde",
+                    "leftValue": "={{ $json.userMessage }}",
+                    "rightValue": "พัสดุ",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "fa4dfaa4-5460-4a24-a228-6b5398e747df",
+                    "leftValue": "={{ $json.userMessage }}",
+                    "rightValue": "is not empty",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1776,
+        1664
+      ],
+      "id": "df5ad36c-925c-41f1-b714-1fa17ebbd6af",
+      "name": "Switch1"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg",
+          "mode": "list",
+          "cachedResultName": "เก็บDataBase อพาท",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "12ef8af5-491d-4050-af5a-66e2bf707dd1",
+      "name": "ดึงข้อมูลผู้เช่า (Tenant Sheet)2",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2048,
+        1504
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AGgSlViK8ETztOCm",
+          "name": "Google Sheets account ไอ้"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\nconst userId = $('Parse LINE Event3').first().json.userId;\nconst replyToken = $('Parse LINE Event3').first().json.replyToken;\n\nconst row = rows.find(r => r['Line_ID (ไอดีไลน์)'] === userId);\n\nif (!row) {\n  return [{\n    json: {\n      replyToken,\n      body: JSON.stringify({\n        replyToken,\n        messages: [{\n          type: \"text\",\n          text: \"❌ ไม่พบข้อมูลห้องพักของคุณในระบบครับ\"\n        }]\n      })\n    }\n  }];\n}\n\nconst roomNo = row['Room_No (เลขห้อง)'] || 'ไม่ระบุ';\nconst tenantName = row['Name (ชื่อผู้เช่า)'] || 'ไม่ระบุชื่อ';\nconst roomRate = parseFloat(row['Room_Rate (ค่าห้อง)']) || 0;\nconst waterPrev = parseFloat(row['Water_Prev (น้ำเดือนก่อน)']) || 0;\nconst waterNow = parseFloat(row['Water_Now (น้ำเดือนนี้)']) || 0;\nconst elecPrev = parseFloat(row['Elec_Prev (ไฟเดือนก่อน)']) || 0;\nconst elecNow = parseFloat(row['Elec_Now (ไฟเดือนนี้)']) || 0;\nconst otherFee = parseFloat(row['Other_Fee (ค่าอื่นๆ/ส่วนกลาง)']) || 0;\n\nconst WATER_RATE = 12;\nconst ELEC_RATE = 4;\n\nlet waterUnit = waterNow - waterPrev;\nlet elecUnit = elecNow - elecPrev;\nif (waterUnit < 0) waterUnit = 0;\nif (elecUnit < 0) elecUnit = 0;\n\nconst waterCost = waterUnit * WATER_RATE;\nconst elecCost = elecUnit * ELEC_RATE;\nconst totalCost = roomRate + waterCost + elecCost + otherFee;\n\nreturn [{\n  json: {\n    replyToken,\n    body: JSON.stringify({\n      replyToken,\n      messages: [{\n        type: \"flex\",\n        altText: \"สรุปยอดชำระประจำเดือน\",\n        contents: {\n          type: \"bubble\",\n          header: {\n            type: \"box\",\n            layout: \"vertical\",\n            backgroundColor: \"#2E86AB\",\n            paddingAll: \"20px\",\n            contents: [\n              { type: \"text\", text: \"🏠 สรุปยอดชำระประจำเดือน\", color: \"#FFFFFF\", weight: \"bold\", size: \"lg\" },\n              { type: \"text\", text: `ห้อง ${roomNo} • ${tenantName}`, color: \"#FFFFFFAA\", size: \"sm\" }\n            ]\n          },\n          body: {\n            type: \"box\",\n            layout: \"vertical\",\n            spacing: \"sm\",\n            contents: [\n              {\n                type: \"box\", layout: \"horizontal\",\n                contents: [\n                  { type: \"text\", text: \"💵 ค่าเช่าห้อง\", color: \"#555555\", size: \"sm\", flex: 3 },\n                  { type: \"text\", text: `${roomRate.toLocaleString()} บาท`, color: \"#333333\", size: \"sm\", weight: \"bold\", flex: 2, align: \"end\" }\n                ]\n              },\n              {\n                type: \"box\", layout: \"horizontal\",\n                contents: [\n                  { type: \"text\", text: `💧 ค่าน้ำ (${waterUnit} หน่วย)`, color: \"#555555\", size: \"sm\", flex: 3 },\n                  { type: \"text\", text: `${waterCost.toLocaleString()} บาท`, color: \"#333333\", size: \"sm\", flex: 2, align: \"end\" }\n                ]\n              },\n              {\n                type: \"box\", layout: \"horizontal\",\n                contents: [\n                  { type: \"text\", text: `⚡ ค่าไฟ (${elecUnit} หน่วย)`, color: \"#555555\", size: \"sm\", flex: 3 },\n                  { type: \"text\", text: `${elecCost.toLocaleString()} บาท`, color: \"#333333\", size: \"sm\", flex: 2, align: \"end\" }\n                ]\n              },\n              {\n                type: \"box\", layout: \"horizontal\",\n                contents: [\n                  { type: \"text\", text: \"🔧 ค่าอื่นๆ/ส่วนกลาง\", color: \"#555555\", size: \"sm\", flex: 3 },\n                  { type: \"text\", text: `${otherFee.toLocaleString()} บาท`, color: \"#333333\", size: \"sm\", flex: 2, align: \"end\" }\n                ]\n              },\n              { type: \"separator\" },\n              {\n                type: \"box\", layout: \"horizontal\",\n                backgroundColor: \"#E8F4FD\",\n                cornerRadius: \"8px\",\n                paddingAll: \"10px\",\n                contents: [\n                  { type: \"text\", text: \"💰 ยอดรวมทั้งสิ้น\", color: \"#2E86AB\", size: \"md\", weight: \"bold\", flex: 3 },\n                  { type: \"text\", text: `${totalCost.toLocaleString()} บาท`, color: \"#2E86AB\", size: \"md\", weight: \"bold\", flex: 2, align: \"end\" }\n                ]\n              },\n              { type: \"text\", text: \"📱 ติดต่อเจ้าหน้าที่เพื่อสแกน QR Code ชำระเงินได้เลยครับ 🙏\", wrap: true, size: \"xs\", color: \"#888888\" }\n            ]\n          }\n        }\n      }]\n    })\n  }\n}];"
+      },
+      "id": "97d74b5d-0cd6-474a-bdd2-2547de38d93b",
+      "name": "คำนวณค่าใช้จ่าย2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2304,
+        1504
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 3
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        496,
+        3984
+      ],
+      "id": "dd7354e7-8fd0-419b-91bb-69962be37b20",
+      "name": "Schedule Trigger_ประกาศฉุกเฉิน3",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg",
+          "mode": "list",
+          "cachedResultName": "เก็บDataBase อพาท",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1808937117,
+          "mode": "list",
+          "cachedResultName": "Announce",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit#gid=1808937117"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        816,
+        3968
+      ],
+      "id": "c531aa54-4b14-41fa-8b7b-8ed0f3180d91",
+      "name": "sheet_ประกาศฉุกเฉิน4",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AGgSlViK8ETztOCm",
+          "name": "Google Sheets account ไอ้"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg",
+          "mode": "list",
+          "cachedResultName": "เก็บDataBase อพาท",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        816,
+        3728
+      ],
+      "id": "9a5758ba-4a84-437e-b865-fad8685b685b",
+      "name": "sheet_LineID2",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AGgSlViK8ETztOCm",
+          "name": "Google Sheets account ไอ้"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1040,
+        3840
+      ],
+      "id": "564f6461-7677-4faf-bd77-c7af7e602494",
+      "name": "Merge1",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst announcements = allItems.filter(i => i.json['Announce']);\nconst tenants = allItems.filter(i => i.json['Line_ID (ไอดีไลน์)']);\n\nif (announcements.length === 0 || tenants.length === 0) return [];\n\n// เรียงตาม DATE&TIME ล่าสุดก่อน\nconst sorted = announcements.sort((a, b) =>\n  new Date(b.json['DATE&TIME']) - new Date(a.json['DATE&TIME'])\n);\nconst latestAnnounce = sorted[0].json;\n\nconst now = new Date();\nconst announceDate = new Date(latestAnnounce['DATE&TIME']);\n\n// เช็ค 1: ต้องเป็นวันนี้\nconst isToday =\n  announceDate.getFullYear() === now.getFullYear() &&\n  announceDate.getMonth()    === now.getMonth() &&\n  announceDate.getDate()     === now.getDate();\n\n// เช็ค 2: ต้องเพิ่งสร้างภายใน 3 นาที (ป้องกันส่งซ้ำ)\nconst diffMinutes = (now - announceDate) / (1000 * 60);\nconst isFresh = diffMinutes <= 3;\n\nif (!isToday || !isFresh) return [];\n\nreturn tenants.map(tenant => ({\n  json: {\n    userId: tenant.json['Line_ID (ไอดีไลน์)'],\n    message: `📢 ประกาศจากนิติบุคคลโฆษิตนิวาส\\n\\nเรียนคุณ ${tenant.json['Name (ชื่อผู้เช่า)'] || 'ผู้พักอาศัย'}\\n\\n\"${latestAnnounce['Announce']}\"`\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        3840
+      ],
+      "id": "e371db11-8c0d-48de-b518-ecbc8359a64a",
+      "name": "ดึงอันล่าสุดมาประกาศ3",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/push",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer Hj00qjd6bTKZu+DNqTYxQLRrPeK/D0RZ7oaophxAaZdvZs1LH9IRrk9UPgEn1YLjVhLoznbYoGjmtIMcXiYiYMs+cG6hbHeYv295srybi0yEt0YiMzLfZnWzFJpVI5dL+n4WD1nZD+aTMLddDMwa3AdB04t89/1O/w1cDnyilFU="
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"to\": \"{{ $json.userId }}\",\n  \"messages\": [\n    {\n      \"type\": \"text\",\n      \"text\": {{ JSON.stringify($json.message) }}\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1456,
+        3840
+      ],
+      "id": "abd116b5-0446-4b05-83c9-eb712d6ca55a",
+      "name": "POST_ส่งประกาศ3",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "O8vvmNtuTgB5qC7f",
+          "name": "Authorization เฮง"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "5314bd8e-4617-42b8-80f4-fcc17a11c1d5",
+      "name": "Schedule Trigger ไว้เทส 1 นาที",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        1296,
+        2096
+      ],
+      "disabled": true,
+      "notes": "ส่งทุกวันสุดท้ายของเดือน เวลา 09:00 น. (Cron: 0 9 L * *)"
+    },
+    {
+      "parameters": {
+        "content": "## งานเส้รจแล้ว 3หลัก\n"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        976,
+        1648
+      ],
+      "typeVersion": 1,
+      "id": "60acfd03-ad05-4c3a-b3b5-5f1b578a1857",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "52c65858-a29e-458d-90b5-099943b6c3ce",
+      "name": "Schedule Trigger ไว้เทส 1 นาที1",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        480,
+        3792
+      ],
+      "disabled": true,
+      "notes": "ส่งทุกวันสุดท้ายของเดือน เวลา 09:00 น. (Cron: 0 9 L * *)"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg",
+          "mode": "list",
+          "cachedResultName": "เก็บDataBase อพาท",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1808937117,
+          "mode": "list",
+          "cachedResultName": "Announce",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit#gid=1808937117"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "DATE&TIME": ""
+          },
+          "matchingColumns": [
+            "Announce"
+          ],
+          "schema": [
+            {
+              "id": "Announce",
+              "displayName": "Announce",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "DATE&TIME",
+              "displayName": "DATE&TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Sent_At",
+              "displayName": "Sent_At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1648,
+        3840
+      ],
+      "id": "467c4e28-8f38-40a2-89c7-0079a27a890c",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AGgSlViK8ETztOCm",
+          "name": "Google Sheets account ไอ้"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 3
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        2368,
+        3968
+      ],
+      "id": "9036cc16-c710-41a7-82e4-589c2a866802",
+      "name": "Schedule Trigger_ประกาศฉุกเฉิน",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg",
+          "mode": "list",
+          "cachedResultName": "เก็บDataBase อพาท",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1808937117,
+          "mode": "list",
+          "cachedResultName": "Announce",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit#gid=1808937117"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2688,
+        3952
+      ],
+      "id": "58e24fed-fd56-4b85-bb52-820a8cbeb8c1",
+      "name": "sheet_ประกาศฉุกเฉิน",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AGgSlViK8ETztOCm",
+          "name": "Google Sheets account ไอ้"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg",
+          "mode": "list",
+          "cachedResultName": "เก็บDataBase อพาท",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2688,
+        3712
+      ],
+      "id": "522eac64-ce4b-4745-9c49-294f4d4c33a7",
+      "name": "sheet_LineID",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AGgSlViK8ETztOCm",
+          "name": "Google Sheets account ไอ้"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        2912,
+        3824
+      ],
+      "id": "749002f9-b512-418c-86d0-9468fb0e2d56",
+      "name": "Merge",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst announcements = allItems.filter(i => i.json['Announce']);\nconst tenants = allItems.filter(i => i.json['Line_ID (ไอดีไลน์)']);\n\nif (announcements.length === 0 || tenants.length === 0) return [];\n\n// เรียงตาม DATE&TIME ล่าสุดก่อน\nconst sorted = announcements.sort((a, b) =>\n  new Date(b.json['DATE&TIME']) - new Date(a.json['DATE&TIME'])\n);\nconst latestAnnounce = sorted[0].json;\n\n// ถ้ามี Sent_At แล้ว = ส่งไปแล้ว → หยุด\nif (latestAnnounce['Sent_At'] && String(latestAnnounce['Sent_At']).trim() !== '') {\n  return [];\n}\n\nconst now = new Date();\nconst announceDate = new Date(latestAnnounce['DATE&TIME']);\n\n// ต้องเป็นวันนี้\nconst isToday =\n  announceDate.getFullYear() === now.getFullYear() &&\n  announceDate.getMonth()    === now.getMonth() &&\n  announceDate.getDate()     === now.getDate();\n\n// ต้องเพิ่งสร้างภายใน 3 นาที\nconst isFresh = (now - announceDate) / (1000 * 60) <= 3;\n\nif (!isToday || !isFresh) return [];\n\nconst announceText = String(latestAnnounce['Announce']).trim();\n\nreturn tenants.map(tenant => ({\n  json: {\n    userId: String(tenant.json['Line_ID (ไอดีไลน์)']).trim(),\n    message: `📢 ประกาศจากนิติบุคคลโฆษิตนิวาส\\n\\nเรียนคุณ ${tenant.json['Name (ชื่อผู้เช่า)'] || 'ผู้พักอาศัย'}\\n\\n\"${announceText}\"`,\n    announceText  // ← ส่งออกไปให้ Update Node ใช้ match\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        3824
+      ],
+      "id": "45702065-d079-4b03-9d97-bc6493d7b66f",
+      "name": "ดึงอันล่าสุดมาประกาศ",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/push",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ to: $json.userId, messages: [{ type: 'text', text: $json.message }] }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3328,
+        3824
+      ],
+      "id": "4c958164-fdda-4f33-b638-7532756ddb29",
+      "name": "POST_ส่งประกาศ",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "O8vvmNtuTgB5qC7f",
+          "name": "Authorization เฮง"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg",
+          "mode": "list",
+          "cachedResultName": "เก็บDataBase อพาท",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1808937117,
+          "mode": "list",
+          "cachedResultName": "Announce",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit#gid=1808937117"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Announce": "={{ $json.announceText }}",
+            "Sent_At": "={{ new Date().toISOString() }}"
+          },
+          "matchingColumns": [
+            "Announce"
+          ],
+          "schema": [
+            {
+              "id": "Announce",
+              "displayName": "Announce",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "DATE&TIME",
+              "displayName": "DATE&TIME",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Sent_At",
+              "displayName": "Sent_At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3520,
+        3824
+      ],
+      "id": "85320e38-c7c0-41db-bb77-0b891150759f",
+      "name": "Update row in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AGgSlViK8ETztOCm",
+          "name": "Google Sheets account ไอ้"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse LINE Webhook Event\nconst body = $input.first().json.body;\nconst events = body.events || [];\n\nif (events.length === 0) return [];\n\nconst event = events[0];\n\nreturn [{\n  json: {\n    userId: event.source?.userId || '',\n    replyToken: event.replyToken || '',\n    message: event.message?.text || ''\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        2736
+      ],
+      "id": "d6e9a601-85d1-44cc-b02f-6d66fab98804",
+      "name": "Parse LINE Event"
+    },
+    {
+      "parameters": {
+        "jsCode": "const userId = $input.first().json.userId;\nconst message = $input.first().json.message;\nconst replyToken = $input.first().json.replyToken;\n\n// ===== ตั้งค่า UID แอดมิน (เพิ่มได้เรื่อยๆ) =====\nconst ADMIN_UIDS = [\n  'U60442cb02400ac426b3da6d1259479ab',  // แอดมิน 1\n  'Ua25dc80da8f1de47f6652744a01e39bf',  // แอดมิน 2\n  'U18a5400d3796f9161fed8b1c64fad2be',  // แอดมิน 3\n];\n// ===================================================\n\nif (!ADMIN_UIDS.includes(userId)) {\n  return [{ json: { skip: true, replyToken, reason: 'not_admin' } }];\n}\n\nif (!message.startsWith('!ประกาศ-')) {\n  return [{ json: { skip: true, replyToken, reason: 'not_command' } }];\n}\n\nconst announceText = message.replace('!ประกาศ-', '').trim();\n\nif (!announceText) {\n  return [{ json: { skip: true, replyToken, reason: 'empty_message' } }];\n}\n\nreturn [{ json: { skip: false, announceText, replyToken } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        2736
+      ],
+      "id": "9e90142d-bf6c-4d09-aeab-813a727a5a8e",
+      "name": "เช็คแอดมินและคำสั่ง"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.skip }}",
+                    "rightValue": false,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    },
+                    "id": "10d7e835-c2e1-4c30-b961-a4c1e404985d"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ส่งประกาศ"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.skip }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    },
+                    "id": "5cfd90a5-1c9c-4b1c-9957-9e8ab3a86c66"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ไม่ทำอะไร"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1888,
+        2736
+      ],
+      "id": "5fe9b852-814e-426f-8216-a1319209cea8",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsCode": "const announceText = $('เช็คแอดมินและคำสั่ง').first().json.announceText;\n\nconst tenants = $input.all();\n\nif (tenants.length === 0) return [];\n\nreturn tenants.map(tenant => ({\n  json: {\n    userId: tenant.json['Line_ID (ไอดีไลน์)'],\n    body: JSON.stringify({\n      to: tenant.json['Line_ID (ไอดีไลน์)'],\n      messages: [{\n        type: \"flex\",\n        altText: \"ประกาศจากนิติบุคคลโฆษิตนิวาส\",\n        contents: {\n          type: \"bubble\",\n          header: {\n            type: \"box\",\n            layout: \"vertical\",\n            backgroundColor: \"#6C63FF\",\n            paddingAll: \"20px\",\n            contents: [\n              { type: \"text\", text: \"📢 ประกาศจากนิติบุคคล\", color: \"#FFFFFF\", weight: \"bold\", size: \"lg\" },\n              { type: \"text\", text: \"โฆษิตนิวาส (Khosit Niwat)\", color: \"#FFFFFFAA\", size: \"sm\" }\n            ]\n          },\n          body: {\n            type: \"box\",\n            layout: \"vertical\",\n            spacing: \"md\",\n            contents: [\n              { type: \"text\", text: announceText, wrap: true, size: \"md\", color: \"#333333\" }\n            ]\n          }\n        }\n      }]\n    })\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        2640
+      ],
+      "id": "7b57a44e-4f9a-4a7f-87c6-12faff9e305a",
+      "name": "เตรียมข้อความประกาศ"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/push",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer Hj00qjd6bTKZu+DNqTYxQLRrPeK/D0RZ7oaophxAaZdvZs1LH9IRrk9UPgEn1YLjVhLoznbYoGjmtIMcXiYiYMs+cG6hbHeYv295srybi0yEt0YiMzLfZnWzFJpVI5dL+n4WD1nZD+aTMLddDMwa3AdB04t89/1O/w1cDnyilFU="
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "=application/json",
+        "body": "={{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2544,
+        2640
+      ],
+      "id": "ad388094-74ff-43ec-bc41-c41401381b90",
+      "name": "POST ส่งประกาศให้ลูกบ้าน",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "O8vvmNtuTgB5qC7f",
+          "name": "Authorization เฮง"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2112,
+        2848
+      ],
+      "id": "ecf32894-4636-4fdf-bbcc-88ba34c892c0",
+      "name": "Respond OK"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg",
+          "mode": "list",
+          "cachedResultName": "เก็บDataBase อพาท",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1GzaEwp__rTSVRnIpCOVPSixqtZKjFmRbTOwqm4fPsEg/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2112,
+        2640
+      ],
+      "id": "cccac9fb-053d-417d-ab2c-c03a14430c7c",
+      "name": "sheet_LineID1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AGgSlViK8ETztOCm",
+          "name": "Google Sheets account ไอ้"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "161af7d9-e8f3-4e73-9e1f-9be21e097047",
+      "name": "LINE Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        2752
+      ],
+      "webhookId": "line-webhook-khosit"
+    },
+    {
+      "parameters": {
+        "content": "## ประกาศถึงทุกคน-bypass\nใช้คำสั่ง\n!ประกาศ-คำที่ต้องการประกาศ"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        912,
+        2672
+      ],
+      "typeVersion": 1,
+      "id": "3422a323-7ece-4607-8319-9e2080669179",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## แจ้งเตือนทุกเดือน"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        960,
+        2128
+      ],
+      "typeVersion": 1,
+      "id": "9f4c283a-3745-476c-bdb0-0a7920f35a69",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\nconst hotelInfo = rows.map(r => r['ข้อมูลที่พัก'] || r[Object.keys(r)[0]]).join('\\n');\n\nconst userMessage = $('Parse LINE Event3').first().json.userMessage;\nconst replyToken = $('Parse LINE Event3').first().json.replyToken;\n\nreturn [{\n  json: {\n    replyToken,\n    userMessage,\n    hotelInfo\n  }\n}];"
+      },
+      "id": "69043b0c-8901-42d7-a097-f11412b97768",
+      "name": "เตรียม Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2272,
+        1888
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const replyToken = $('เตรียม Prompt').first().json.replyToken;\nlet aiAnswer = '❌ ไม่สามารถตอบได้ในขณะนี้ กรุณาติดต่อนิติบุคคลครับ';\n\ntry {\n  const response = $input.first().json;\n  if (response.choices && response.choices.length > 0) {\n    aiAnswer = response.choices[0].message.content || aiAnswer;\n  }\n} catch (e) {\n  aiAnswer = '❌ เกิดข้อผิดพลาดในการประมวลผล กรุณาติดต่อนิติบุคคลโดยตรงครับ';\n}\n\nreturn [{\n  json: {\n    replyToken,\n    body: JSON.stringify({\n      replyToken,\n      messages: [{\n        type: \"flex\",\n        altText: \"ตอบคำถามจาก AI\",\n        contents: {\n          type: \"bubble\",\n          header: {\n            type: \"box\",\n            layout: \"vertical\",\n            backgroundColor: \"#6C63FF\",\n            paddingAll: \"20px\",\n            contents: [\n              { type: \"text\", text: \"🤖 ผู้ช่วยอัจฉริยะ\", color: \"#FFFFFF\", weight: \"bold\", size: \"lg\" },\n              { type: \"text\", text: \"โฆษิตนิวาส (Khosit Niwat)\", color: \"#FFFFFFAA\", size: \"sm\" }\n            ]\n          },\n          body: {\n            type: \"box\",\n            layout: \"vertical\",\n            spacing: \"md\",\n            contents: [\n              {\n                type: \"text\",\n                text: aiAnswer.trim(),\n                wrap: true,\n                size: \"sm\",\n                color: \"#333333\"\n              },\n              { type: \"separator\" },\n              {\n                type: \"text\",\n                text: \"💬 หากต้องการข้อมูลเพิ่มเติม ติดต่อนิติบุคคลได้เลยครับ\",\n                wrap: true,\n                size: \"xs\",\n                color: \"#888888\"\n              }\n            ]\n          }\n        }\n      }]\n    })\n  }\n}];"
+      },
+      "id": "8e44fa41-bb3d-473f-86ba-d2694c2e41e5",
+      "name": "จัดรูปแบบคำตอบ",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        1888
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger (สิ้นเดือน)": {
+      "main": [
+        [
+          {
+            "node": "ดึงผู้เช่าทุกห้อง (Sheet)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ดึงผู้เช่าทุกห้อง (Sheet)": {
+      "main": [
+        [
+          {
+            "node": "คำนวณค่าใช้จ่าย (Push)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "คำนวณค่าใช้จ่าย (Push)": {
+      "main": [
+        [
+          {
+            "node": "Push LINE Message (ทุกห้อง)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Push LINE Message (ทุกห้อง)": {
+      "main": [
+        []
+      ]
+    },
+    "ดึงข้อมูลที่พัก (Sheet2)": {
+      "main": [
+        [
+          {
+            "node": "เตรียม Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini API": {
+      "main": [
+        [
+          {
+            "node": "จัดรูปแบบคำตอบ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LINE Webhook3": {
+      "main": [
+        [
+          {
+            "node": "Parse LINE Event3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse LINE Event3": {
+      "main": [
+        [
+          {
+            "node": "Switch1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ตอบกลับ LINE3": {
+      "main": [
+        [
+          {
+            "node": "Respond to LINE3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ดึงข้อพัสดุ (Tenant Sheet)2": {
+      "main": [
+        [
+          {
+            "node": "ดึง และ แสดงจำนวนพัสดุ2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ดึง และ แสดงจำนวนพัสดุ2": {
+      "main": [
+        [
+          {
+            "node": "ตอบกลับ LINE3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch1": {
+      "main": [
+        [
+          {
+            "node": "ดึงข้อมูลผู้เช่า (Tenant Sheet)2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ดึงข้อพัสดุ (Tenant Sheet)2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ดึงข้อมูลที่พัก (Sheet2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ดึงข้อมูลผู้เช่า (Tenant Sheet)2": {
+      "main": [
+        [
+          {
+            "node": "คำนวณค่าใช้จ่าย2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "คำนวณค่าใช้จ่าย2": {
+      "main": [
+        [
+          {
+            "node": "ตอบกลับ LINE3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger_ประกาศฉุกเฉิน3": {
+      "main": [
+        [
+          {
+            "node": "sheet_LineID2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "sheet_ประกาศฉุกเฉิน4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "sheet_ประกาศฉุกเฉิน4": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "sheet_LineID2": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "ดึงอันล่าสุดมาประกาศ3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ดึงอันล่าสุดมาประกาศ3": {
+      "main": [
+        [
+          {
+            "node": "POST_ส่งประกาศ3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger ไว้เทส 1 นาที1": {
+      "main": [
+        []
+      ]
+    },
+    "POST_ส่งประกาศ3": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger_ประกาศฉุกเฉิน": {
+      "main": [
+        [
+          {
+            "node": "sheet_LineID",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "sheet_ประกาศฉุกเฉิน",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "sheet_ประกาศฉุกเฉิน": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "sheet_LineID": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "ดึงอันล่าสุดมาประกาศ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ดึงอันล่าสุดมาประกาศ": {
+      "main": [
+        [
+          {
+            "node": "POST_ส่งประกาศ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST_ส่งประกาศ": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse LINE Event": {
+      "main": [
+        [
+          {
+            "node": "เช็คแอดมินและคำสั่ง",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "เช็คแอดมินและคำสั่ง": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "sheet_LineID1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "เตรียมข้อความประกาศ": {
+      "main": [
+        [
+          {
+            "node": "POST ส่งประกาศให้ลูกบ้าน",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST ส่งประกาศให้ลูกบ้าน": {
+      "main": [
+        []
+      ]
+    },
+    "sheet_LineID1": {
+      "main": [
+        [
+          {
+            "node": "เตรียมข้อความประกาศ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LINE Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse LINE Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "เตรียม Prompt": {
+      "main": [
+        [
+          {
+            "node": "Gemini API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "จัดรูปแบบคำตอบ": {
+      "main": [
+        [
+          {
+            "node": "ตอบกลับ LINE (AI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "2846a62b-1671-4c57-8811-ec62e93c0988",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c6ea936472e83d981fde2e1f0a8b6d61fe0dc6b54f3a7d1b0fae6f08b4334cee"
+  },
+  "id": "kHJCorWYJ1a0MzdS",
+  "tags": []
+}
